@@ -1,0 +1,52 @@
+{
+  "name": "@apiheron/sdk",
+  "version": "0.1.2",
+  "description": "Browser capture for Apiheron: records which API response fields an app reads.",
+  "license": "MIT",
+  "homepage": "https://apiheron.com/docs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/egebilge/apiheron-sdk.git"
+  },
+  "bugs": "https://github.com/egebilge/apiheron-sdk/issues",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./tanstack": {
+      "types": "./dist/tanstack.d.ts",
+      "default": "./dist/tanstack.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "rm -rf dist && bun build src/index.ts src/tanstack.ts --outdir dist --target browser --format esm --splitting --external @tanstack/query-core && tsc -p tsconfig.build.json && bun fix-dts.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "prepack": "bun run build"
+  },
+  "peerDependencies": {
+    "@tanstack/query-core": ">=5"
+  },
+  "peerDependenciesMeta": {
+    "@tanstack/query-core": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@tanstack/query-core": "^5",
+    "@types/bun": "^1.4.2",
+    "typescript": "^7.0.2",
+    "zod": "^4.6.5"
+  }
+}

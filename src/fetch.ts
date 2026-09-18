@@ -1,4 +1,10 @@
-import { bodyBytes, callSite, capture, captureLazy } from "./capture";
+import {
+  bodyBytes,
+  callSite,
+  capture,
+  captureLazy,
+  contentLengthOf,
+} from "./capture";
 import { diagnostics } from "./diagnostics";
 import { expectParse, installParse, nativeParse } from "./parse";
 import { currentScenario, type Scenario } from "./scenario";
@@ -107,6 +113,7 @@ function instrument(response: Response, ctx: Ctx): Response {
     start: ctx.start,
     end,
     bytes: bodyBytes(text, response.headers, response.type === "basic"),
+    contentLength: contentLengthOf(response.headers),
     initiator: ctx.initiator,
   });
 

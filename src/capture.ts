@@ -22,6 +22,8 @@ type Captured = {
   /** `performance.now()` when the request started. */
   start: number;
   bytes: number;
+  /** The response's `content-length` header, when the browser shows it. */
+  contentLength?: number;
   data: unknown;
   /** `performance.now()` when the body finished downloading; defaults to now. */
   end?: number;
@@ -114,6 +116,7 @@ function record({
   status,
   start,
   bytes,
+  contentLength,
   data,
   end = performance.now(),
   initiator = null,
@@ -158,7 +161,7 @@ function record({
     initiator: initiator?.slice(0, 1024) ?? null,
     page: globalThis.location?.pathname.slice(0, 2048) ?? null,
   };
-  timingKeys.set(event, [url, start]);
+  timingKeys.set(event, [url, start, contentLength]);
   queue.push(event);
   diagnostics.captured++;
   if (untracked) diagnostics.untracked++;
@@ -222,18 +225,28 @@ export function drainRequests(): RequestEvent[] {
   return events;
 }
 
-/** Unmasked URL and `performance.now()` start, kept until the event is sent. */
-const timingKeys = new WeakMap<RequestEvent, [url: string, start: number]>();
+/** Unmasked URL, `performance.now()` start and `content-length`, kept until the event is sent. */
+const timingKeys = new WeakMap<
+  RequestEvent,
+  [url: string, start: number, contentLength?: number]
+>();
 
 /**
  * Compressed body size from Resource Timing, read at send time because the
  * entry can land after the body resolves. Cross-origin responses report 0
- * without a `Timing-Allow-Origin` header; then nothing is sent.
+ * without a `Timing-Allow-Origin` header; `content-length` then stands in: CORS
+ * always exposes it, and it counts the body as sent. Chunked responses carry
+ * neither, and nothing is sent.
  */
 function wireBytesOf(event: RequestEvent): number | undefined {
+  const [url, start, contentLength] = timingKeys.get(event) ?? [];
+  const size = timingBytes(url, start) || contentLength || 0;
+  return size > 0 ? Math.min(Math.round(size), 2_147_483_647) : undefined;
+}
+
+function timingBytes(url?: string, start?: number): number {
   try {
-    const [url, start] = timingKeys.get(event) ?? [];
-    if (!url || start === undefined) return;
+    if (!url || start === undefined) return 0;
     let best: PerformanceResourceTiming | undefined;
     for (const entry of performance.getEntriesByName(
       new URL(url, globalThis.location?.href).href,
@@ -245,10 +258,9 @@ function wireBytesOf(event: RequestEvent): number | undefined {
       )
         best = entry;
     }
-    const size = Math.round(best?.encodedBodySize ?? 0);
-    return size > 0 ? Math.min(size, 2_147_483_647) : undefined;
+    return best?.encodedBodySize ?? 0;
   } catch {
-    return;
+    return 0;
   }
 }
 
@@ -326,6 +338,10 @@ export function bodyBytes(
     ? length
     : byteLength(text);
 }
+
+/** `content-length` as a number; undefined when absent or unreadable. */
+export const contentLengthOf = (headers: { get(name: string): unknown }) =>
+  Number(headers.get("content-length")) || undefined;
 
 /** crypto.randomUUID only exists in secure contexts; http on a LAN IP is not one. */
 export const newId = (): string =>

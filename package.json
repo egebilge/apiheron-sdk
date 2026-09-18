@@ -1,6 +1,6 @@
 {
   "name": "@apiheron/sdk",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Browser capture for Apiheron: records which API response fields an app reads.",
   "license": "MIT",
   "homepage": "https://apiheron.com/docs",

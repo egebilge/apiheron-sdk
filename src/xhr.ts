@@ -1,4 +1,10 @@
-import { bodyBytes, byteLength, callSite, captureLazy } from "./capture";
+import {
+  bodyBytes,
+  byteLength,
+  callSite,
+  captureLazy,
+  contentLengthOf,
+} from "./capture";
 import { diagnostics } from "./diagnostics";
 import { expectParse, installParse, nativeParse } from "./parse";
 import { currentScenario, type Scenario } from "./scenario";
@@ -87,6 +93,7 @@ function onLoad(this: XMLHttpRequest) {
       source: "xhr" as const,
       url: this.responseURL || meta.url,
       status: this.status,
+      contentLength: contentLengthOf(headers),
     };
 
     if (type === "json") {
@@ -96,7 +103,11 @@ function onLoad(this: XMLHttpRequest) {
       const adopt = captureLazy({
         ...fields,
         data,
-        bytes: length > 0 ? length : byteLength(JSON.stringify(data)),
+        // Cross-origin hides content-encoding, so the length may be compressed.
+        bytes:
+          sameOrigin && !headers.get("content-encoding") && length > 0
+            ? length
+            : byteLength(JSON.stringify(data)),
       });
       Object.defineProperty(this, "response", {
         configurable: true,

@@ -27,7 +27,7 @@ export const RequestEventSchema = z.object({
   startedAt: z.number(),
   durationMs: z.number().nonnegative(),
   bytes: z.number().int().nonnegative(),
-  /** Compressed body size from Resource Timing; absent when the browser hides it (no `Timing-Allow-Origin`). */
+  /** Compressed body size from Resource Timing, else `content-length`; absent when neither is visible (no `Timing-Allow-Origin`, chunked). */
   wireBytes: z.number().int().positive().max(2_147_483_647).nullish(),
   leaves: z
     .array(z.string().max(INGEST_LIMITS.pathLength))

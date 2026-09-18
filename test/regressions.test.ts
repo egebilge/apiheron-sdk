@@ -155,7 +155,7 @@ test("wide shapes are bounded and explicitly marked incomplete", () => {
   expect(getCaptureHealth().adapters.fetch).toBe(true);
 });
 
-test("wireBytes comes from the closest resource timing entry and is omitted when hidden", () => {
+test("wireBytes comes from the closest resource timing entry, then content-length, and is omitted when hidden", () => {
   const native = performance.getEntriesByName;
   const entries = (sizes: number[]) =>
     ((name: string) =>
@@ -165,7 +165,7 @@ test("wireBytes comes from the closest resource timing entry and is omitted when
             encodedBodySize,
           }))
         : []) as unknown as typeof native;
-  const send = (start: number) =>
+  const send = (start: number, contentLength?: number) =>
     capture({
       source: "fetch",
       method: "GET",
@@ -174,6 +174,7 @@ test("wireBytes comes from the closest resource timing entry and is omitted when
       status: 200,
       start,
       bytes: 1_747_000,
+      contentLength,
       data: { a: 1 },
     });
   try {
@@ -184,6 +185,12 @@ test("wireBytes comes from the closest resource timing entry and is omitted when
     performance.getEntriesByName = entries([0]);
     send(0);
     expect(drainRequests()[0]).not.toHaveProperty("wireBytes");
+    // content-length stands in there, and never overrides a measured size.
+    send(0, 131_000);
+    expect(drainRequests()[0]?.wireBytes).toBe(131_000);
+    performance.getEntriesByName = entries([999, 126_000]);
+    send(1001, 131_000);
+    expect(drainRequests()[0]?.wireBytes).toBe(126_000);
     performance.getEntriesByName = () => {
       throw new Error("unsupported");
     };

@@ -81,6 +81,7 @@ export function instrumentAxios(instance: AxiosLike) {
                 new URL(url).origin === globalThis.location?.origin,
               )
             : Number(headers["content-length"] ?? 0),
+        contentLength: Number(headers["content-length"]) || undefined,
         data,
         initiator: config[INITIATOR],
       });

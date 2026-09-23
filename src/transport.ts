@@ -133,6 +133,7 @@ export async function flush(
             key,
             sessionId,
             release: release?.slice(0, 128),
+            sentAt: Date.now(),
             events: items.map((item) => item.event),
           }),
         ],

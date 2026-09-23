@@ -153,7 +153,8 @@ function record({
         2048,
       ),
     status,
-    startedAt: performance.timeOrigin + start,
+    // Wall clock, not timeOrigin: performance.now() drifts from Date.now() in long-lived tabs.
+    startedAt: Date.now() - (performance.now() - start),
     durationMs: Math.max(0, end - start),
     bytes,
     leaves: untracked ? [] : leaves,

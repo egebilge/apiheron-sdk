@@ -79,6 +79,8 @@ export const IngestBatchSchema = z.object({
   sessionId: id,
   /** Build of the app that sent the batch, from `data-release`, e.g. a commit SHA. */
   release: z.string().max(128).optional(),
+  /** Sender's `Date.now()` when the batch left, so the collector can undo clock skew; absent from SDKs before 2026-09-23. */
+  sentAt: z.number().optional(),
   events: z
     .array(z.discriminatedUnion("type", [RequestEventSchema, UsageEventSchema]))
     .max(INGEST_LIMITS.events),

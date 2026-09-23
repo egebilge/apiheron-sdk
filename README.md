@@ -53,6 +53,7 @@ instrumentQueryClient(queryClient); // before the first query
 | `ignore`          | `string[]` | `[]`     | URL substrings to skip, e.g. `["/health", "analytics."]`.                |
 | `release`         | `string`   | none     | Build of the app, e.g. a commit SHA; links findings and source maps.     |
 | `sampleRate`      | `number`   | `1`      | Share of page loads to record, 0 to 1. Decided once per page load.       |
+| `captureRequests` | `boolean`  | `false`  | Also send each request's URL and body as sent, for "Copy as cURL".      |
 
 ## What leaves the page
 
@@ -63,6 +64,13 @@ instrumentQueryClient(queryClient); // before the first query
   tokens, email addresses) and query values are hashed; other path segments and
   field names stay readable.
 - TanStack query keys as random, page-scoped aliases; scenario names as typed.
+
+- Only with `captureRequests: true` (script tag: `data-capture-requests`): the
+  request URL and body as sent, so the dashboard can copy a runnable cURL.
+  Query and body fields whose names look like credentials (`password`,
+  `token`, `…_key`, …) are replaced with `***`; FormData, files and bodies
+  over 8 KB are not sent. Headers are never read, so the cURL carries a
+  `$TOKEN` placeholder.
 
 Use `ignore` for URLs that should not be recorded at all.
 

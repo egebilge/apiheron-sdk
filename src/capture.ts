@@ -3,6 +3,7 @@ import { INGEST_LIMITS } from "./core/limits";
 import { isIdSegment, normalizeRoute, shapeOf } from "./core/shape";
 import { diagnostics, SDK_VERSION } from "./diagnostics";
 import { nativeParse } from "./parse";
+import { replayOf } from "./replay";
 import { currentScenario, type Scenario } from "./scenario";
 import { requestIdOf, track } from "./tracker";
 
@@ -162,6 +163,8 @@ function record({
     initiator: initiator?.slice(0, 1024) ?? null,
     page: globalThis.location?.pathname.slice(0, 2048) ?? null,
   };
+  const replay = replayOf(url, body);
+  if (replay) event.replay = replay;
   timingKeys.set(event, [url, start, contentLength]);
   queue.push(event);
   diagnostics.captured++;

@@ -42,6 +42,18 @@ export const RequestEventSchema = z.object({
   sdkVersion: z.string().max(64).nullish(),
   scenario: z.string().max(INGEST_LIMITS.scenarioLength).nullish(),
   scenarioRunId: id.nullish(),
+  /**
+   * Only with `captureRequests`: the unmasked URL and body, secret-like names
+   * masked, so the request can be copied as cURL. `omitted` says why a body
+   * is missing.
+   */
+  replay: z
+    .object({
+      url: z.string().max(INGEST_LIMITS.replayUrlLength),
+      body: z.string().max(INGEST_LIMITS.replayBodyLength).nullable(),
+      omitted: z.enum(["unreadable", "too-large"]).nullish(),
+    })
+    .nullish(),
 });
 
 /** Where "not read" is no evidence; absent from SDKs before 2026-09-17. */

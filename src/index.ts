@@ -1,6 +1,7 @@
 import { newId, setIgnored } from "./capture";
 import { diagnostics } from "./diagnostics";
 import { instrumentFetch } from "./fetch";
+import { setCaptureRequests } from "./replay";
 import { instrumentXhr } from "./xhr";
 
 export { getCaptureHealth } from "./diagnostics";
@@ -27,6 +28,13 @@ export type InitOptions = {
    * then cover the sample only.
    */
   sampleRate?: number;
+  /**
+   * Also record each request's URL and body as sent (default false), so it can
+   * be copied as cURL. Off by default: then query values and path ids are
+   * hashed and no body leaves the page. Secret-like query and body fields
+   * (password, token, …_key) are always masked; headers are never read.
+   */
+  captureRequests?: boolean;
 };
 
 const STARTED = Symbol.for("apiheron.started");
@@ -42,6 +50,7 @@ export function init({
   ignore = [],
   release,
   sampleRate = 1,
+  captureRequests = false,
 }: InitOptions) {
   if (typeof window === "undefined") return; // SSR / tests: nothing to capture.
   const scope = globalThis as { [STARTED]?: true };
@@ -52,6 +61,7 @@ export function init({
   if (!diagnostics.sampled) return; // NaN or 0: never recorded.
 
   setIgnored(ignore);
+  setCaptureRequests(captureRequests);
   instrumentFetch(endpoint);
   instrumentXhr(endpoint);
   const sessionId = newId();

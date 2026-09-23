@@ -11,4 +11,7 @@ export const INGEST_LIMITS = {
   routeLength: 2048,
   queryKeyLength: 1024,
   scenarioLength: 128,
+  /** Opt-in request replay (`captureRequests`): URL and body, in characters. */
+  replayUrlLength: 8192,
+  replayBodyLength: 8192,
 } as const;

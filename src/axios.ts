@@ -45,12 +45,15 @@ export function instrumentAxios(instance: AxiosLike) {
   patched.add(instance);
   diagnostics.adapters.axios = true;
   instance.interceptors.request.use((config) => {
+    // init() chose not to record this page load: leave the app untouched.
+    if (!diagnostics.sampled) return config;
     config[START] = performance.now();
     config[SCENARIO] = currentScenario() ?? null;
     config[INITIATOR] = callSite();
     return config;
   });
   instance.interceptors.response.use((response) => {
+    if (!diagnostics.sampled) return response;
     const { config, data } = response;
     // An earlier app interceptor may have unwrapped data already.
     if (!config || data === null || typeof data !== "object") return response;

@@ -52,7 +52,7 @@ instrumentQueryClient(queryClient); // before the first query
 | `flushIntervalMs` | `number`   | `2000`   | How often buffered events are sent.                                      |
 | `ignore`          | `string[]` | `[]`     | URL substrings to skip, e.g. `["/health", "analytics."]`.                |
 | `release`         | `string`   | none     | Build of the app, e.g. a commit SHA; links findings and source maps.     |
-| `sampleRate`      | `number`   | `1`      | Share of page loads to record, 0 to 1. Decided once per page load.       |
+| `sampleRate`      | `number`   | `1`      | Share of page loads to record, 0 to 1. Decided once per page load; pages not sampled are left untouched. |
 | `captureRequests` | `boolean`  | `false`  | Also send each request's URL and body as sent, for "Copy as cURL".      |
 
 ## What leaves the page

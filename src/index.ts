@@ -40,8 +40,11 @@ export type InitOptions = {
 const STARTED = Symbol.for("apiheron.started");
 
 /**
- * Starts capture. Load in development only, e.g. in `instrumentation-client.ts`:
- * `import("@apiheron/sdk").then((v) => v.init({ key, endpoint: "https://apiheron.example.com/api/ingest" }))`
+ * Starts capture. Call once before the app's first request, e.g. at the top
+ * level of Next.js `instrumentation-client.ts`; a dynamic `import()` there may
+ * resolve after hydration and miss early requests. In production, lower
+ * `sampleRate`: a page load that is not sampled records nothing and leaves
+ * response data untouched.
  */
 export function init({
   key,

@@ -8,6 +8,7 @@ import {
   drainRequests,
   setIgnored,
 } from "../src/capture";
+import { diagnostics } from "../src/diagnostics";
 import { instrumentFetch } from "../src/fetch";
 import { init } from "../src/index";
 import { instrumentQueryClient, queryAlias } from "../src/tanstack";
@@ -341,6 +342,22 @@ describe("instrumentAxios", () => {
     const { respond } = axiosInstance();
     const data = { a: 1 };
     expect(respond({ data, status: 200 }).data).toBe(data);
+  });
+
+  test("leaves data untouched on a page load init() did not sample", () => {
+    const { request, respond } = axiosInstance();
+    diagnostics.sampled = false;
+    try {
+      const data = structuredClone(body);
+      const config = request({ url: "http://api.test/items", method: "get" });
+      const response = respond({ data, status: 200, config });
+      // Untracked data stays structured-cloneable; a tracked proxy is not.
+      expect(response.data).toBe(data);
+      expect(() => structuredClone(response.data)).not.toThrow();
+      expect(drainRequests()).toEqual([]);
+    } finally {
+      diagnostics.sampled = true;
+    }
   });
 
   test("an internal failure hands the app the raw data", async () => {

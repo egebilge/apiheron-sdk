@@ -295,6 +295,8 @@ export const isLibraryFrame = (frame: string) => LIBRARY_FRAME.test(frame);
  * `VersionPoll.useEffect (version-poll_tsx_1a2b.js:23:17)`. Lets a developer
  * find the caller, and tells StrictMode's double effect (same call site) apart
  * from two components fetching the same data. Development builds keep names.
+ * Called only from the SDK's own wrappers (fetch, XHR, interceptors), never in
+ * tail position: Safari's proper tail calls would drop the wrapper's frame.
  */
 export function callSite(): string | null {
   const errorClass = Error as { stackTraceLimit?: number };
@@ -302,17 +304,43 @@ export function callSite(): string | null {
   errorClass.stackTraceLimit = 40;
   const stack = new Error().stack ?? "";
   errorClass.stackTraceLimit = limit;
-  const frames = stack
-    .split("\n")
-    .slice(1)
+  return siteOf(stack);
+}
+
+/** Frames kept from a minified build, for the collector to resolve with source maps. */
+const MINIFIED_FRAMES = 10;
+/** Line 1–99, column 1000+: a minified chunk. */
+const MINIFIED_LOCATION = /:\d{1,2}:\d{4,}\)?$/;
+
+/** `callSite` for a stack captured two calls below the app: in callSite, in its SDK caller. */
+export function siteOf(stack: string): string | null {
+  const lines = stack.split("\n");
+  // V8 opens with the message line. Minified chunks give the SDK's own frames
+  // no recognizable name, so they are skipped by position.
+  const frames = lines
+    .slice(lines[0]?.startsWith("Error") ? 3 : 2)
     .map((line) => line.trim().replace(/^at /, ""))
-    .filter((line) => line && !isLibraryFrame(line))
-    .slice(0, 3)
+    .filter((line) => line && !isLibraryFrame(line));
+  // In a minified build library frames pass the filter too; the collector drops
+  // them once source maps name their files, so keep enough to reach the app.
+  const count = frames.some((frame) => MINIFIED_LOCATION.test(frame))
+    ? MINIFIED_FRAMES
+    : 3;
+  let site = "";
+  for (const frame of frames.slice(0, count)) {
     // Keep the file name, drop origin, folders and query strings.
-    .map((frame) =>
-      frame.replace(/(\(|@|^)[^()@\s]*\/([^/?#()\s]+)(\?[^:()\s]*)?/, "$1$2"),
+    const short = frame.replace(
+      /(\(|@|^)[^()@\s]*\/([^/?#()\s]+)(\?[^:()\s]*)?/,
+      "$1$2",
     );
-  return frames.length ? frames.join(" ← ").slice(0, 1024) : null;
+    const next = site ? `${site} ← ${short}` : short;
+    if (next.length > 1024) {
+      site ||= next.slice(0, 1024);
+      break;
+    }
+    site = next;
+  }
+  return site || null;
 }
 
 /** FNV-1a. */

@@ -98,6 +98,16 @@ the adapter was installed; captured requests and reads provide the evidence that
 it is working. Per-query overrides of TanStack structural sharing should retain
 the adapter's sharing function if field tracking is required.
 
+Tracked responses are proxies, which structured cloning rejects. When
+`structuredClone`, `postMessage` on a worker, port or channel, history state or
+an IndexedDB write fails only because of them, the SDK retries with the raw
+data and marks those paths untracked. `window.postMessage` to another window is
+not covered; pass `unwrap(value)` there.
+
+In a minified build the code location carries up to ten frames, because
+library frames cannot be told apart there. Upload the build's source maps with
+the same `release`, and the collector shows the first app frames.
+
 Scenario names are transmitted: use workflow labels rather than customer names
 or other sensitive data. The badge's **Copy telemetry preview** copies the last
 ten local request events and health counters without an ingest key or response

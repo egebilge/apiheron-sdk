@@ -1,4 +1,5 @@
 import { newId, setIgnored } from "./capture";
+import { instrumentClone } from "./clone";
 import { diagnostics } from "./diagnostics";
 import { instrumentFetch } from "./fetch";
 import { setCaptureRequests } from "./replay";
@@ -67,6 +68,7 @@ export function init({
   setCaptureRequests(captureRequests);
   instrumentFetch(endpoint);
   instrumentXhr(endpoint);
+  instrumentClone();
   const sessionId = newId();
   setInterval(
     () => flush(endpoint, sessionId, key, false, release),

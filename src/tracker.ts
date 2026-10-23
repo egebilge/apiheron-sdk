@@ -28,6 +28,8 @@ const usage = new Map<string, Usage>();
 const proxies = new WeakMap<object, object>();
 const targets = new WeakMap<object, object>();
 const owners = new WeakMap<object, string>();
+/** Response path of each proxy, e.g. `rows[]`, for gaps noted after the fact. */
+const pathOf = new WeakMap<object, string>();
 // Child paths shared by every proxy at the same path, so reading `row.name`
 // across 10k rows does not build 10k strings.
 const childPaths = new Map<string, Map<string, string>>();
@@ -360,7 +362,48 @@ function wrap<T>(value: T, requestId: string, path: string, depth: number): T {
   proxies.set(value, proxy);
   targets.set(proxy, value);
   owners.set(proxy, requestId);
+  pathOf.set(proxy, path);
   return proxy;
+}
+
+/**
+ * Copy of `value` with every tracking proxy swapped for its raw object, for a
+ * structured clone (proxies cannot be cloned). Reads of the copy are invisible,
+ * so each proxied path is noted as untracked rather than looking unused.
+ * Shared references and cycles survive; non-JSON objects keep their own rules.
+ */
+export function unwrapDeep<T>(value: T): T {
+  const copies = new Map<object, unknown>();
+  const visit = (item: unknown): unknown => {
+    if (typeof item !== "object" || item === null) return item;
+    const rawItem = unwrap(item);
+    if (rawItem !== item)
+      raw(rawItem, owners.get(item) ?? "", pathOf.get(item) ?? "");
+    if (copies.has(rawItem)) return copies.get(rawItem);
+    if (rawItem instanceof Map) {
+      const copy = new Map();
+      copies.set(rawItem, copy);
+      for (const [k, v] of rawItem) copy.set(visit(k), visit(v));
+      return copy;
+    }
+    if (rawItem instanceof Set) {
+      const copy = new Set();
+      copies.set(rawItem, copy);
+      for (const v of rawItem) copy.add(visit(v));
+      return copy;
+    }
+    if (!isJsonShaped(rawItem)) return rawItem;
+    const copy: Record<string, unknown> | unknown[] = Array.isArray(rawItem)
+      ? []
+      : Object.create(Object.getPrototypeOf(rawItem));
+    copies.set(rawItem, copy);
+    for (const key of Object.keys(rawItem))
+      (copy as Record<string, unknown>)[key] = visit(
+        (rawItem as Record<string, unknown>)[key],
+      );
+    return copy;
+  };
+  return untracked(() => visit(value)) as T;
 }
 
 function instrumentOp(

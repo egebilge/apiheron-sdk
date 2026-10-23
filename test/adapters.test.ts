@@ -7,6 +7,7 @@ import {
   capture,
   drainRequests,
   setIgnored,
+  siteOf,
 } from "../src/capture";
 import { diagnostics } from "../src/diagnostics";
 import { instrumentFetch } from "../src/fetch";
@@ -103,10 +104,69 @@ describe("request identity", () => {
   });
 
   test("call site keeps the app frame and drops the SDK's", () => {
-    // Function names depend on the engine inlining; the file is stable.
-    const site = callSite();
+    // callSite runs inside an SDK wrapper, called by the app; these stand in
+    // for both. `?? null` keeps the calls out of tail position (JSC would drop
+    // the frames). Function names depend on inlining; the file is stable.
+    const sdkWrapper = () => callSite() ?? null;
+    const app = () => sdkWrapper() ?? null;
+    const site = app();
     expect(site).toMatch(/^[^/]*adapters\.test\.ts:\d+:\d+/m);
     expect(site).not.toContain("capture.ts");
+  });
+
+  const v8 = (...frames: string[]) =>
+    ["Error", ...frames.map((frame) => `    at ${frame}`)].join("\n");
+  const sdkFrames = [
+    "T (https://app.example/_next/static/chunks/sdk-1a.js:1:5698)",
+    "l (https://app.example/_next/static/chunks/sdk-2b.js:1:4978)",
+  ];
+
+  test("development stacks keep three app frames", () => {
+    const site = siteOf(
+      v8(
+        "callSite (http://localhost:3000/chunks/capture.js:300:9)",
+        "send (http://localhost:3000/chunks/xhr.js:72:5)",
+        ...["a", "b", "c", "d"].map(
+          (name, i) =>
+            `${name} (http://localhost:3000/chunks/page.js:${i + 10}:3)`,
+        ),
+      ),
+    );
+    expect(site).toBe("a (page.js:10:3) ← b (page.js:11:3) ← c (page.js:12:3)");
+  });
+
+  test("minified stacks skip the SDK by position and keep ten frames", () => {
+    const app = Array.from(
+      { length: 12 },
+      (_, i) =>
+        `f${i} (https://app.example/_next/static/chunks/c${i}.js:1:${1000 + i})`,
+    );
+    const site = siteOf(v8(...sdkFrames, ...app)) ?? "";
+    expect(site).not.toContain("sdk-");
+    expect(site.split(" ← ")).toHaveLength(10);
+    expect(site.startsWith("f0 (c0.js:1:1000)")).toBe(true);
+  });
+
+  test("stacks without a message line (Firefox, Safari) skip the same frames", () => {
+    const site = siteOf(
+      [
+        "callSite@https://app.example/chunks/sdk-1a.js:1:5698",
+        "send@https://app.example/chunks/sdk-2b.js:1:4978",
+        "v@https://app.example/chunks/api-3c.js:1:1260",
+      ].join("\n"),
+    );
+    expect(site).toBe("v@api-3c.js:1:1260");
+  });
+
+  test("a call site never exceeds the ingest limit", () => {
+    const long = Array.from(
+      { length: 10 },
+      (_, i) =>
+        `${"x".repeat(150)}${i} (https://app.example/c${i}.js:1:${2000 + i})`,
+    );
+    const site = siteOf(v8(...sdkFrames, ...long)) ?? "";
+    expect(site.length).toBeLessThanOrEqual(1024);
+    expect(site.split(" ← ").length).toBeGreaterThan(1);
   });
 });
 

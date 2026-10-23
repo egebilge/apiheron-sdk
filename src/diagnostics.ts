@@ -17,6 +17,8 @@ const health = {
   failures: 0,
   /** Exceptions inside SDK code that were swallowed to protect the app. */
   errors: 0,
+  /** Clones (structuredClone, postMessage, …) retried with raw data instead of proxies. */
+  unwrappedClones: 0,
   queued: 0,
   pausedUntil: 0,
   lastStatus: null as number | null,

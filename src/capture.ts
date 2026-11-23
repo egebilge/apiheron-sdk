@@ -35,8 +35,11 @@ type Captured = {
   scenario?: Scenario | null;
 };
 
-/** Dev-server internals (Next.js overlay, HMR) are not the app's API traffic. */
-const IGNORED_PATHS = /\/(__nextjs[_/]|_next\/)/;
+/**
+ * Dev-server internals (Next.js overlay, HMR) and React Server Component
+ * payloads (`?_rsc=`) are not the app's API traffic.
+ */
+const IGNORED_PATHS = /\/(__nextjs[_/]|_next\/)|[?&]_rsc=/;
 /** Substrings from `init({ ignore })` / `data-ignore`: matching URLs are not recorded. */
 let ignored: string[] = [];
 export const setIgnored = (patterns: string[]) => {
@@ -178,6 +181,37 @@ function record({
   recent.push(event);
   if (recent.length > MAX_RECENT) recent.shift();
   return { event, leaves };
+}
+
+/** Set once the page is being unloaded: requests the browser cancels then are not failures. */
+let leaving = false;
+if (typeof addEventListener === "function") {
+  addEventListener("pagehide", () => {
+    leaving = true;
+  });
+  addEventListener("pageshow", () => {
+    leaving = false;
+  });
+}
+
+/**
+ * Records a request that produced no JSON body: a network error or timeout
+ * (`status` 0, as browsers report a request that got no response) or a
+ * non-JSON error page such as a proxy's 502/504. No field evidence is
+ * claimed. Skipped while the page unloads or the device is offline: those
+ * say nothing about the API.
+ */
+export function captureFailure(
+  input: Omit<Captured, "data" | "bytes" | "untracked"> & { bytes?: number },
+) {
+  if (input.status === 0 && (leaving || globalThis.navigator?.onLine === false))
+    return;
+  record({
+    ...input,
+    bytes: input.bytes ?? 0,
+    data: undefined,
+    untracked: true,
+  });
 }
 
 /** Records a parsed JSON response and returns the tracking proxy to hand to the app. */

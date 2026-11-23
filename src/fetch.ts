@@ -2,6 +2,7 @@ import {
   bodyBytes,
   callSite,
   capture,
+  captureFailure,
   captureLazy,
   contentLengthOf,
 } from "./capture";
@@ -42,11 +43,33 @@ export function instrumentFetch(skipPrefix: string) {
     } catch {
       diagnostics.errors += 1;
     }
-    const response = await original(input, init);
+    let response: Response;
+    try {
+      response = await original(input, init);
+    } catch (error) {
+      if (before) failed(before, error);
+      throw error;
+    }
     if (!before) return response;
     try {
-      if (!response.headers.get("content-type")?.includes("json"))
+      if (!response.headers.get("content-type")?.includes("json")) {
+        // An error page (a proxy's 502/504 HTML, a server's HTML 500) is
+        // still a failed API call; its body is left untouched.
+        if (response.status >= 400) {
+          captureFailure({
+            source: "fetch",
+            scenario: before.scenario,
+            method: before.method,
+            url: response.url || before.url,
+            body: before.body,
+            status: response.status,
+            start: before.start,
+            bytes: contentLengthOf(response.headers),
+            initiator: before.initiator,
+          });
+        }
         return response;
+      }
 
       // Time the download itself: the app may call json() much later, and that
       // wait is not the API's latency.
@@ -66,6 +89,30 @@ export function instrumentFetch(skipPrefix: string) {
   globalThis.fetch = Object.assign(patched, original, {
     [PATCHED]: true as const,
   });
+}
+
+/**
+ * The request got no response. A network error (TypeError) or a timeout
+ * signal (TimeoutError) is the API's failure; an abort is the app's own
+ * choice (unmount, superseded query) and is not recorded.
+ */
+function failed(before: Omit<Ctx, "downloaded">, error: unknown) {
+  try {
+    const name = (error as { name?: unknown } | null)?.name;
+    if (name !== "TypeError" && name !== "TimeoutError") return;
+    captureFailure({
+      source: "fetch",
+      scenario: before.scenario,
+      method: before.method,
+      url: before.url,
+      body: before.body,
+      status: 0,
+      start: before.start,
+      initiator: before.initiator,
+    });
+  } catch {
+    diagnostics.errors += 1;
+  }
 }
 
 /** Everything read from the request before it is sent; null when it is the SDK's own traffic. */

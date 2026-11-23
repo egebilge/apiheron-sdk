@@ -64,6 +64,11 @@ instrumentQueryClient(queryClient); // before the first query
   tokens, email addresses) and query values are hashed; other path segments and
   field names stay readable.
 - TanStack query keys as random, page-scoped aliases; scenario names as typed.
+- Failed requests without a JSON body, with the same fields and no field
+  paths: a network error or timeout as status `0`, and non-JSON error pages
+  (a proxy's 502/504, an HTML 500) with their status. Requests the app aborts,
+  and those cut off while the page unloads or the device is offline, are not
+  recorded.
 
 - Only with `captureRequests: true` (script tag: `data-capture-requests`): the
   request URL and body as sent, so the dashboard can copy a runnable cURL.

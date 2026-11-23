@@ -175,6 +175,17 @@ describe("instrumentFetch", () => {
     async (input: RequestInfo | URL) => {
       const url = String(input);
       const isHtml = url.includes("/html");
+      if (url.includes("/down")) throw new TypeError("Failed to fetch");
+      if (url.includes("/slow"))
+        throw new DOMException("signal timed out", "TimeoutError");
+      if (url.includes("/cancel"))
+        throw new DOMException("aborted", "AbortError");
+      if (url.includes("/gateway")) {
+        return new Response("<html>502 Bad Gateway</html>", {
+          status: 502,
+          headers: { "content-type": "text/html", "content-length": "29" },
+        });
+      }
       if (url.includes("/empty")) {
         return new Response("", { headers: { "content-type": "json" } });
       }
@@ -232,6 +243,39 @@ describe("instrumentFetch", () => {
     await (await fetch(INGEST, { method: "POST" })).text();
     await (await fetch("http://api.test/html")).text();
     expect(drainRequests()).toEqual([]);
+  });
+
+  test("a network error or timeout is recorded as status 0 and rethrown", async () => {
+    const down = fetch("http://api.test/down/1");
+    expect(down).rejects.toThrow(TypeError);
+    await down.catch(() => {});
+    const slow = fetch("http://api.test/slow");
+    expect(slow).rejects.toThrow("signal timed out");
+    await slow.catch(() => {});
+    const events = drainRequests();
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject({
+      source: "fetch",
+      route: "api.test/down/:id",
+      status: 0,
+      bytes: 0,
+      leaves: [],
+      tracking: "untracked",
+    });
+    expect(events[1]?.status).toBe(0);
+  });
+
+  test("an aborted request is the app's choice and is not recorded", async () => {
+    await fetch("http://api.test/cancel").catch(() => {});
+    expect(drainRequests()).toEqual([]);
+  });
+
+  test("a non-json error page is recorded without touching its body", async () => {
+    const response = await fetch("http://api.test/gateway");
+    expect(await response.text()).toContain("Bad Gateway");
+    expect(drainRequests()).toMatchObject([
+      { status: 502, bytes: 29, leaves: [], tracking: "untracked" },
+    ]);
   });
 
   test("invalid json still rejects like native response.json()", async () => {

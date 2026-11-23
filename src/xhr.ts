@@ -2,6 +2,7 @@ import {
   bodyBytes,
   byteLength,
   callSite,
+  captureFailure,
   captureLazy,
   contentLengthOf,
 } from "./capture";
@@ -49,6 +50,9 @@ export function instrumentXhr(skipPrefix: string) {
         // Registered at open, before the app's handlers: the proxy must be
         // ready when they parse the body.
         this.addEventListener("load", onLoad);
+        // No response at all; "abort" is the app's own choice and is ignored.
+        this.addEventListener("error", onNoResponse);
+        this.addEventListener("timeout", onNoResponse);
         metas.set(this, {
           method: String(args[0]),
           url,
@@ -84,9 +88,23 @@ function onLoad(this: XMLHttpRequest) {
   try {
     const meta = metas.get(this);
     const type = this.responseType;
-    if (!meta || (type !== "" && type !== "text" && type !== "json")) return;
-    if (!this.getResponseHeader("content-type")?.includes("json")) return;
+    if (!meta) return;
     const headers = { get: (name: string) => this.getResponseHeader(name) };
+    if (!headers.get("content-type")?.includes("json")) {
+      // An error page (a proxy's 502/504 HTML) is still a failed API call.
+      if (this.status >= 400) {
+        captureFailure({
+          ...meta,
+          source: "xhr",
+          url: this.responseURL || meta.url,
+          status: this.status,
+          bytes: contentLengthOf(headers),
+        });
+        capturedXhr.add(this);
+      }
+      return;
+    }
+    if (type !== "" && type !== "text" && type !== "json") return;
     const sameOrigin = new URL(meta.url).origin === globalThis.location?.origin;
     const fields = {
       ...meta,
@@ -125,5 +143,16 @@ function onLoad(this: XMLHttpRequest) {
     capturedXhr.add(this);
   } catch {
     // Not JSON after all, or SDK trouble: the app reads the response as usual.
+  }
+}
+
+function onNoResponse(this: XMLHttpRequest) {
+  try {
+    const meta = metas.get(this);
+    if (!meta) return;
+    captureFailure({ ...meta, source: "xhr", status: 0 });
+    capturedXhr.add(this);
+  } catch {
+    diagnostics.errors += 1;
   }
 }

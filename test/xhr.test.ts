@@ -16,8 +16,12 @@ class FakeXhr extends EventTarget {
   open(_method: string, url: string) {
     this.responseURL = url;
   }
+  outcome: "load" | "error" | "timeout" | "abort" = "load";
   send(_body?: unknown) {
-    queueMicrotask(() => this.dispatchEvent(new Event("load")));
+    queueMicrotask(() => {
+      this.dispatchEvent(new Event(this.outcome));
+      this.dispatchEvent(new Event("loadend"));
+    });
   }
   getResponseHeader(name: string) {
     return name === "content-type" ? this.contentType : null;
@@ -40,7 +44,7 @@ const request = (setup?: (xhr: FakeXhr) => void, url = "http://api.test/a/7") =>
     const xhr = new XMLHttpRequest() as unknown as FakeXhr;
     xhr.open("get", url);
     setup?.(xhr);
-    xhr.addEventListener("load", () => resolve(xhr));
+    xhr.addEventListener("loadend", () => resolve(xhr));
     xhr.send();
   });
 
@@ -103,5 +107,34 @@ describe("xhr adapter", () => {
     const xhr = await request();
     const data = JSON.parse(xhr.responseText, (_k, v) => v);
     expect(requestIdOf(data)).toBeUndefined();
+  });
+
+  test("an error or timeout is recorded as status 0, an abort is not", async () => {
+    for (const outcome of ["error", "timeout", "abort"] as const)
+      await request((x) => {
+        x.outcome = outcome;
+        x.status = 0;
+      });
+    expect(drainRequests()).toMatchObject([
+      { source: "xhr", status: 0, bytes: 0, tracking: "untracked" },
+      { source: "xhr", status: 0 },
+    ]);
+  });
+
+  test("a non-json error page is recorded as a failure", async () => {
+    await request((x) => {
+      x.status = 504;
+      x.contentType = "text/html";
+    });
+    expect(drainRequests()).toMatchObject([
+      { source: "xhr", status: 504, leaves: [], tracking: "untracked" },
+    ]);
+  });
+
+  test("a non-json success is not an API response", async () => {
+    await request((x) => {
+      x.contentType = "text/html";
+    });
+    expect(drainRequests()).toEqual([]);
   });
 });

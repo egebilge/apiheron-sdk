@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
 import { QueryClient } from "@tanstack/query-core";
 import { version } from "../package.json";
-import { capture, drainRequests } from "../src/capture";
+import { callSite, capture, drainRequests, isJsonBody } from "../src/capture";
 import { getCaptureHealth } from "../src/diagnostics";
 import { instrumentFetch } from "../src/fetch";
 import { endScenario, startScenario } from "../src/scenario";
@@ -198,5 +198,30 @@ test("wireBytes comes from the closest resource timing entry, then content-lengt
     expect(drainRequests()[0]).not.toHaveProperty("wireBytes");
   } finally {
     performance.getEntriesByName = native;
+  }
+});
+
+test("streams of JSON are not read as one JSON body", () => {
+  expect(isJsonBody("application/json; charset=utf-8")).toBe(true);
+  expect(isJsonBody("application/problem+json")).toBe(true);
+  for (const type of [
+    "application/x-ndjson",
+    "application/jsonl",
+    "application/json-seq",
+    "application/stream+json",
+    "text/event-stream",
+    "text/html",
+    null,
+  ])
+    expect(isJsonBody(type)).toBe(false);
+});
+
+test("a call site that cannot be read costs nothing but itself", () => {
+  const prepare = Error.prepareStackTrace;
+  Error.prepareStackTrace = () => 42 as unknown as string;
+  try {
+    expect(callSite()).toBeNull();
+  } finally {
+    Error.prepareStackTrace = prepare;
   }
 });

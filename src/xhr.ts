@@ -5,6 +5,7 @@ import {
   captureFailure,
   captureLazy,
   contentLengthOf,
+  isJsonBody,
 } from "./capture";
 import { diagnostics } from "./diagnostics";
 import { expectParse, installParse, nativeParse } from "./parse";
@@ -90,7 +91,7 @@ function onLoad(this: XMLHttpRequest) {
     const type = this.responseType;
     if (!meta) return;
     const headers = { get: (name: string) => this.getResponseHeader(name) };
-    if (!headers.get("content-type")?.includes("json")) {
+    if (!isJsonBody(headers.get("content-type"))) {
       // An error page (a proxy's 502/504 HTML) is still a failed API call.
       if (this.status >= 400) {
         captureFailure({

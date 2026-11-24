@@ -323,6 +323,8 @@ function wrap<T>(value: T, requestId: string, path: string, depth: number): T {
       }
 
       // Probing a missing key (`row.foo ?? x`) is not reading response data.
+      // Not Object.hasOwn: it is missing before Safari 15.4, and this trap
+      // runs on every field the app reads.
       if (typeof result === "function" || !Object.hasOwn(target, key)) {
         return result;
       }

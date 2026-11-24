@@ -117,9 +117,11 @@ function bodyText(body: unknown): string | null | undefined {
     try {
       return JSON.stringify(maskJson(nativeParse(body)));
     } catch {
+      // Neither JSON nor a form: nothing here can mask it (XML, NDJSON, plain
+      // text, a form with a stray "&"), so it is not sent at all.
       return URL_ENCODED.test(body)
         ? maskParams(new URLSearchParams(body))
-        : body;
+        : undefined;
     }
   }
   if (body instanceof URLSearchParams) return maskParams(body);

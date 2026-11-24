@@ -62,9 +62,16 @@ instrumentQueryClient(queryClient); // before the first query
 - Field paths of JSON responses and which of them the app read, e.g.
   `items[].price`. Response values are never sent unless `captureResponses` is on.
 - Method, status, timing, response size, a hash of the request body, the code
-  location that made the request, and the route. Id-like path segments (numbers, uuids,
-  tokens, email addresses) and query values are hashed; other path segments and
-  field names stay readable.
+  location that made the request, the route, and the path of the page the
+  request was made from. Id-like path segments (numbers, uuids, tokens, email
+  addresses) and query values are hashed, in the request URL and in the page
+  path alike; other path segments and field names stay readable. A response
+  whose keys are data (`{"ada@example.com": {…}}`) shows those keys in its
+  field paths.
+- The hash made in the page is short and unkeyed: on its own, a phone number
+  or a numeric id behind it could be found by trying them all. The collector
+  replaces each with a keyed hash under its own secret before storing it, so
+  what is kept cannot be reversed without that secret.
 - TanStack query keys as random, page-scoped aliases; scenario names as typed.
 - Failed requests without a JSON body, with the same fields and no field
   paths: a network error or timeout as status `0`, and non-JSON error pages
@@ -75,18 +82,24 @@ instrumentQueryClient(queryClient); // before the first query
 - Only with `captureRequests: true` (script tag: `data-capture-requests`): the
   request URL and body as sent, so the dashboard can copy a runnable cURL.
   Query and body fields whose names look like credentials (`password`,
-  `token`, `…_key`, …) are replaced with `***`; FormData, files and bodies
-  over 8 KB are not sent. Headers are never read, so the cURL carries a
+  `token`, `…_key`, …) are replaced with `***`, and so are values that are a
+  credential themselves (a JWT, an `Authorization` value); FormData, files,
+  bodies over 8 KB and bodies that are neither JSON nor a form (XML, plain
+  text) are not sent. The collector masks credentials again on arrival. Headers are never read, so the cURL carries a
   `$TOKEN` placeholder.
 - Only with `captureResponses: true` as well (`data-capture-responses`): each
-  JSON response as received, cut at 32 KB, masked the same way.
+  JSON response as received, cut at 32 KB, masked the same way. Apiheron keeps
+  the responses of the latest 20 requests per endpoint.
 - What is masked in captured URLs and bodies, before anything leaves the page:
   credential names (`password`, `sifre`, `token`, `…_key`, …), values that
   identify a person whatever the field is called (e-mail, T.C. kimlik no,
   card number and IBAN with valid checksums, Turkish mobile number), and the
   names you list in `maskFields` (script tag: `data-mask-fields`, comma
   separated). Names, addresses and landlines have no recognizable format:
-  list their field names.
+  list their field names. Masking is best effort: a value is checked as a
+  whole, so an e-mail inside a sentence and any string over 64 characters
+  pass unmasked. Apiheron stores captured URLs, bodies and responses only
+  from SDK 0.5.0 and later.
 
 Use `ignore` for URLs that should not be recorded at all.
 
@@ -126,8 +139,9 @@ the same `release`, and the collector shows the first app frames.
 
 Scenario names are transmitted: use workflow labels rather than customer names
 or other sensitive data. The badge's **Copy telemetry preview** copies the last
-ten local request events and health counters without an ingest key or response
-values. Id-like path segments (numbers, uuids, tokens, email addresses) and query
+ten local request events and health counters without an ingest key. With
+`captureRequests` or `captureResponses` on, those events carry the masked
+bodies they would send. Id-like path segments (numbers, uuids, tokens, email addresses) and query
 values are hashed; other path segments and field names are still visible; inspect them when deciding
 which URL substrings to exclude with `ignore`.
 

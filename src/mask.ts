@@ -1,4 +1,4 @@
-import { isSecretName } from "./core/secrets";
+import { isSecretName, isSecretValue } from "./core/secrets";
 
 /** Stands in for a masked value. */
 export const MASK = "***";
@@ -85,15 +85,20 @@ const isCard = (digits: string) =>
 
 /**
  * Values that identify a person whatever the field is called: e-mail,
- * T.C. kimlik no, card number, IBAN, Turkish mobile number. Checksums keep
- * ordinary ids and amounts from matching.
+ * T.C. kimlik no, card number, IBAN, Turkish mobile number; and values that
+ * are a credential (a JWT, an `Authorization` value). Checksums keep ordinary
+ * ids and amounts from matching.
  */
 export function isPersonalValue(value: unknown): boolean {
+  // Before the length limit: a JWT is longer than any personal value.
+  if (isSecretValue(value)) return true;
   if (typeof value === "number")
     return (
       Number.isSafeInteger(value) &&
       value > 0 &&
-      (isTcKimlik(String(value)) || isCard(String(value)))
+      (isTcKimlik(String(value)) ||
+        isCard(String(value)) ||
+        MOBILE.test(String(value)))
     );
   if (typeof value !== "string" || value.length < 6 || value.length > 64)
     return false;

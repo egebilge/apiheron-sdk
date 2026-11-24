@@ -2,6 +2,11 @@
 export const INGEST_LIMITS = {
   leaves: 5000,
   pathLength: 512,
+  /**
+   * Characters of paths one request keeps per list. Server-side only: the
+   * collector cuts a longer list and marks the request truncated.
+   */
+  pathChars: 128_000,
   ops: 500,
   indexes: 200,
   gaps: 200,

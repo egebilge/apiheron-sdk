@@ -8,6 +8,21 @@ export type Shape = {
   truncated?: boolean;
 };
 
+/**
+ * Top-level response fields that are the API envelope, not data. A project
+ * can change the list; these are the defaults. Here, not in detect, because
+ * the SDK counts items and must not ship the detectors.
+ */
+export const DEFAULT_IGNORED_FIELDS = [
+  "isSucceded",
+  "isSuccess",
+  "success",
+  "message",
+  "messageList",
+  "errors",
+];
+const ENVELOPE = new Set(DEFAULT_IGNORED_FIELDS);
+
 const MAX_DEPTH = 8;
 const ARRAY_SAMPLE = 20;
 
@@ -82,12 +97,17 @@ function walk(
  * Length of the response list: the root array, or the longest top-level array
  * field. Envelopes often carry an empty `errors`/`messageList` before the data.
  */
+/**
+ * How many items a list response carries: the array itself, or the longest
+ * array among the object's fields. Envelope arrays are not data: an empty
+ * `messageList` beside a string `value` made every such response "0 items".
+ */
 function itemCountOf(value: unknown): number | null {
   if (Array.isArray(value)) return value.length;
   if (value === null || typeof value !== "object") return null;
-  const lengths = Object.values(value)
-    .filter(Array.isArray)
-    .map((list) => list.length);
+  const lengths = Object.entries(value)
+    .filter(([key, field]) => Array.isArray(field) && !ENVELOPE.has(key))
+    .map(([, list]) => (list as unknown[]).length);
   return lengths.length ? Math.max(...lengths) : null;
 }
 

@@ -5,6 +5,7 @@ import {
   captureFailure,
   captureLazy,
   contentLengthOf,
+  isJsonBody,
 } from "./capture";
 import { diagnostics } from "./diagnostics";
 import { expectParse, installParse, nativeParse } from "./parse";
@@ -52,7 +53,7 @@ export function instrumentFetch(skipPrefix: string) {
     }
     if (!before) return response;
     try {
-      if (!response.headers.get("content-type")?.includes("json")) {
+      if (!isJsonBody(response.headers.get("content-type"))) {
         // An error page (a proxy's 502/504 HTML, a server's HTML 500) is
         // still a failed API call; its body is left untouched.
         if (response.status >= 400) {

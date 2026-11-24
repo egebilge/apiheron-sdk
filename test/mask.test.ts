@@ -88,3 +88,16 @@ test("captured URL, query, body and response are masked", () => {
     value: [{ Adi: "Ada", Fat_Soyadi: "***", Tc: "***", Id: 7 }],
   });
 });
+
+test("credential values and numeric mobile numbers are masked like personal values", () => {
+  expect(
+    isPersonalValue("eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.dGVzdHNpZ25hdHVyZQ"),
+  ).toBe(true);
+  expect(isPersonalValue("Bearer abcdef0123456789")).toBe(true);
+  expect(isPersonalValue(5321234567)).toBe(true);
+  expect(isPersonalValue(905321234567)).toBe(true);
+  // A plain amount or id of the same length is not a mobile number.
+  expect(isPersonalValue(1234567890)).toBe(false);
+  expect(isMaskedName("x-api-key")).toBe(true);
+  expect(isMaskedName("user[password]")).toBe(true);
+});

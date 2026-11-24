@@ -77,8 +77,22 @@ test("unreadable and oversized bodies are dropped with a reason", () => {
     body: null,
     omitted: "unreadable",
   });
-  const big = "x".repeat(INGEST_LIMITS.replayBodyLength + 1);
+  const big = JSON.stringify({
+    note: "x".repeat(INGEST_LIMITS.replayBodyLength),
+  });
   expect(replayOf("https://api.test", big)?.omitted).toBe("too-large");
+  // Neither JSON nor a clean form: it cannot be masked, so it is not sent.
+  for (const raw of [
+    "user=a&password=hunter2&",
+    "a=1&flag&password=hunter2",
+    '{"password":"hunter2"}\n{"a":1}',
+    "<login><password>hunter2</password></login>",
+  ])
+    expect(replayOf("https://api.test", raw)).toEqual({
+      url: "https://api.test/",
+      body: null,
+      omitted: "unreadable",
+    });
   expect(replayOf("https://api.test", undefined)?.body).toBeNull();
 });
 

@@ -164,7 +164,10 @@ function record({
     leaves: untracked ? [] : leaves,
     itemCount,
     initiator: initiator?.slice(0, 1024) ?? null,
-    page: globalThis.location?.pathname.slice(0, 2048) ?? null,
+    // Masked like the request path: `/reset-password/<token>` is a page too.
+    page: globalThis.location
+      ? maskPath(globalThis.location.pathname).slice(0, 2048)
+      : null,
   };
   const replay = replayOf(url, body, data);
   if (replay) event.replay = replay;
@@ -333,13 +336,30 @@ export const isLibraryFrame = (frame: string) => LIBRARY_FRAME.test(frame);
  * tail position: Safari's proper tail calls would drop the wrapper's frame.
  */
 export function callSite(): string | null {
-  const errorClass = Error as { stackTraceLimit?: number };
-  const limit = errorClass.stackTraceLimit;
-  errorClass.stackTraceLimit = 40;
-  const stack = new Error().stack ?? "";
-  errorClass.stackTraceLimit = limit;
-  return siteOf(stack);
+  // Runs inside the app's own calls (an axios interceptor, `.map` on a
+  // response): a frozen `Error` or a custom `prepareStackTrace` must cost the
+  // call site, never the call.
+  try {
+    const errorClass = Error as { stackTraceLimit?: number };
+    const limit = errorClass.stackTraceLimit;
+    errorClass.stackTraceLimit = 40;
+    const stack = new Error().stack ?? "";
+    errorClass.stackTraceLimit = limit;
+    return siteOf(stack);
+  } catch {
+    return null;
+  }
 }
+
+/**
+ * A JSON body the SDK may read whole. Streams of JSON (NDJSON, JSON Lines,
+ * json-seq) are left alone: reading a copy would buffer a response that never
+ * ends and keep it downloading after the app cancelled it.
+ */
+export const isJsonBody = (contentType: string | null | undefined) =>
+  !!contentType &&
+  contentType.includes("json") &&
+  !/ndjson|jsonl|json-seq|stream/i.test(contentType);
 
 /** Frames kept from a minified build, for the collector to resolve with source maps. */
 const MINIFIED_FRAMES = 10;

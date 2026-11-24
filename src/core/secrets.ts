@@ -1,7 +1,9 @@
 // Names are snake_cased first. Distinctive words also match glued to a prefix
-// (`Mailparola`, `Iyssifre`); short ones need a word boundary (`compass`, `monkey`).
+// (`Mailparola`, `Iyssifre`), with a possessive, a plain-text marker or a
+// glued number (`Sistemsifresi`, `ParolaClear`, `kasaSifre10`); short ones
+// need a word boundary (`compass`, `monkey`).
 const SENSITIVE_NAME =
-  /(password|passwd|sifre|parola|secret|token|conn(ection)?_?str(ing)?)$|(^|_)(pass|pwd|anahtar|authorization|credentials?|(base|api|service|server|internal|endpoint)_(url|uri|address|adres))$/;
+  /(password|passwd|sifre(si)?|parola|secret|token|conn(ection)?_?str(ing)?)(_?clear)?\d*$|(^|_)(pass|pwd|anahtar|authorization|credentials?|(base|api|service|server|internal|endpoint)_(url|uri|address|adres))$/;
 /** `…_key` is a credential unless the qualifier says it is a lookup key. */
 const KEY_NAME = /_key$/;
 const LOOKUP_KEY =

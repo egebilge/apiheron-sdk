@@ -55,6 +55,7 @@ instrumentQueryClient(queryClient); // before the first query
 | `sampleRate`      | `number`   | `1`      | Share of page loads to record, 0 to 1. Decided once per page load; pages not sampled are left untouched. |
 | `captureRequests` | `boolean`  | `false`  | Also send each request's URL and body as sent, for "Copy as cURL".      |
 | `captureResponses` | `boolean` | `false`  | With `captureRequests`, also send each JSON response (first 32 KB), for the request detail view. |
+| `maskFields`      | `(string \| RegExp)[]` | `[]` | Extra field names to mask in captured URLs and bodies. Matched against the name lowercased with separators removed (`TC_Kimlik_No` → `tckimlikno`). |
 
 ## What leaves the page
 
@@ -78,9 +79,14 @@ instrumentQueryClient(queryClient); // before the first query
   over 8 KB are not sent. Headers are never read, so the cURL carries a
   `$TOKEN` placeholder.
 - Only with `captureResponses: true` as well (`data-capture-responses`): each
-  JSON response as received, cut at 32 KB, with the same credential-name
-  masking. These are real response values; enable it only where that is
-  acceptable.
+  JSON response as received, cut at 32 KB, masked the same way.
+- What is masked in captured URLs and bodies, before anything leaves the page:
+  credential names (`password`, `sifre`, `token`, `…_key`, …), values that
+  identify a person whatever the field is called (e-mail, T.C. kimlik no,
+  card number and IBAN with valid checksums, Turkish mobile number), and the
+  names you list in `maskFields` (script tag: `data-mask-fields`, comma
+  separated). Names, addresses and landlines have no recognizable format:
+  list their field names.
 
 Use `ignore` for URLs that should not be recorded at all.
 

@@ -2,6 +2,7 @@ import { newId, setIgnored } from "./capture";
 import { instrumentClone } from "./clone";
 import { diagnostics } from "./diagnostics";
 import { instrumentFetch } from "./fetch";
+import { setMaskFields } from "./mask";
 import { setCaptureRequests, setCaptureResponses } from "./replay";
 import { instrumentXhr } from "./xhr";
 
@@ -43,6 +44,14 @@ export type InitOptions = {
    * real data: turn this on only where that is acceptable.
    */
   captureResponses?: boolean;
+  /**
+   * Extra field names to mask in captured URLs and bodies, on top of
+   * credentials (password, token, …_key) and personal values (e-mail, T.C.
+   * kimlik no, card, IBAN, mobile number), which are always masked. A string
+   * matches the name exactly; a RegExp is tested against it. Both see the name
+   * lowercased with separators removed: `TC_Kimlik_No` is `tckimlikno`.
+   */
+  maskFields?: (string | RegExp)[];
 };
 
 const STARTED = Symbol.for("apiheron.started");
@@ -63,6 +72,7 @@ export function init({
   sampleRate = 1,
   captureRequests = false,
   captureResponses = false,
+  maskFields = [],
 }: InitOptions) {
   if (typeof window === "undefined") return; // SSR / tests: nothing to capture.
   const scope = globalThis as { [STARTED]?: true };
@@ -75,6 +85,7 @@ export function init({
   setIgnored(ignore);
   setCaptureRequests(captureRequests);
   setCaptureResponses(captureResponses);
+  setMaskFields(maskFields);
   instrumentFetch(endpoint);
   instrumentXhr(endpoint);
   instrumentClone();

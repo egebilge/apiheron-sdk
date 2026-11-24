@@ -1,9 +1,8 @@
 import { INGEST_LIMITS } from "./core/limits";
-import { isSecretName } from "./core/secrets";
+import { isMaskedName, isPersonalValue, MASK } from "./mask";
 import { nativeParse } from "./parse";
 
-/** Stands in for a value whose name looks like a credential. */
-export const MASK = "***";
+export { MASK };
 
 /** `init({ captureRequests })`: off unless the app opts in. */
 let enabled = false;
@@ -57,11 +56,16 @@ export function boundedJson(value: unknown, limit: number) {
         if (!first) write(",");
         first = false;
         write(`${JSON.stringify(key)}:`);
-        if (isSecretName(key)) write(JSON.stringify(MASK));
+        if (isMaskedName(key)) write(JSON.stringify(MASK));
         else walk(item);
       }
       write("}");
-    } else write(JSON.stringify(inner) ?? "null");
+    } else
+      write(
+        isPersonalValue(inner)
+          ? JSON.stringify(MASK)
+          : (JSON.stringify(inner) ?? "null"),
+      );
   };
   try {
     walk(value);
@@ -74,21 +78,36 @@ export function boundedJson(value: unknown, limit: number) {
 const maskParams = (params: URLSearchParams) => {
   const masked = new URLSearchParams();
   for (const [key, value] of params)
-    masked.append(key, isSecretName(key) ? MASK : value);
+    masked.append(
+      key,
+      isMaskedName(key) || isPersonalValue(value) ? MASK : value,
+    );
   return masked.toString();
 };
 
-/** Recursively replaces values under secret-like keys; arrays keep their order. */
+/**
+ * Recursively replaces values under secret-like or `maskFields` keys, and
+ * values that identify a person; arrays keep their order.
+ */
 export function maskJson(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(maskJson);
-  if (value === null || typeof value !== "object") return value;
+  if (value === null || typeof value !== "object")
+    return isPersonalValue(value) ? MASK : value;
   return Object.fromEntries(
     Object.entries(value).map(([key, inner]) => [
       key,
-      isSecretName(key) ? MASK : maskJson(inner),
+      isMaskedName(key) ? MASK : maskJson(inner),
     ]),
   );
 }
+
+const decode = (segment: string) => {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
+};
 
 const URL_ENCODED = /^[^=&\s]+=[^&\s]*(&[^=&\s]+=[^&\s]*)*$/;
 
@@ -115,8 +134,9 @@ function bodyText(body: unknown): string | null | undefined {
 
 /**
  * The request as the app sent it, for "Copy as cURL". Headers are never read,
- * so an Authorization token cannot leak; secret-like query and body fields are
- * masked. Null unless `captureRequests` is on; with `captureResponses` it
+ * so an Authorization token cannot leak; secret-like and `maskFields` names
+ * and personal values (e-mail, T.C. kimlik no, card, IBAN, mobile number)
+ * are masked in the path, query and body. Null unless `captureRequests` is on; with `captureResponses` it
  * also carries the parsed JSON response, masked the same way.
  */
 export function replayOf(
@@ -129,6 +149,11 @@ export function replayOf(
   try {
     const parsed = new URL(url, globalThis.location?.href);
     parsed.search = maskParams(parsed.searchParams);
+    // `/guests/12345678950` or `/users/a@b.com`: an id that is personal data.
+    parsed.pathname = parsed.pathname
+      .split("/")
+      .map((segment) => (isPersonalValue(decode(segment)) ? MASK : segment))
+      .join("/");
     href = parsed.href.slice(0, INGEST_LIMITS.replayUrlLength);
   } catch {
     return null;

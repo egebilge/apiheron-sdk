@@ -52,6 +52,16 @@ export const RequestEventSchema = z.object({
       url: z.string().max(INGEST_LIMITS.replayUrlLength),
       body: z.string().max(INGEST_LIMITS.replayBodyLength).nullable(),
       omitted: z.enum(["unreadable", "too-large"]).nullish(),
+      /**
+       * Only with `captureResponses`: the JSON response as received, secret-like
+       * fields masked, cut at `replayResponseLength` (`truncated`).
+       */
+      response: z
+        .object({
+          body: z.string().max(INGEST_LIMITS.replayResponseLength),
+          truncated: z.boolean().nullish(),
+        })
+        .nullish(),
     })
     .nullish(),
 });

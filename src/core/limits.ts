@@ -14,4 +14,6 @@ export const INGEST_LIMITS = {
   /** Opt-in request replay (`captureRequests`): URL and body, in characters. */
   replayUrlLength: 8192,
   replayBodyLength: 8192,
+  /** Opt-in `captureResponses`: response body kept up to this many characters, cut beyond. */
+  replayResponseLength: 32768,
 } as const;

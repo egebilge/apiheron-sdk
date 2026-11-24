@@ -54,11 +54,12 @@ instrumentQueryClient(queryClient); // before the first query
 | `release`         | `string`   | none     | Build of the app, e.g. a commit SHA; links findings and source maps.     |
 | `sampleRate`      | `number`   | `1`      | Share of page loads to record, 0 to 1. Decided once per page load; pages not sampled are left untouched. |
 | `captureRequests` | `boolean`  | `false`  | Also send each request's URL and body as sent, for "Copy as cURL".      |
+| `captureResponses` | `boolean` | `false`  | With `captureRequests`, also send each JSON response (first 32 KB), for the request detail view. |
 
 ## What leaves the page
 
 - Field paths of JSON responses and which of them the app read, e.g.
-  `items[].price`. Response values are never sent.
+  `items[].price`. Response values are never sent unless `captureResponses` is on.
 - Method, status, timing, response size, a hash of the request body, the code
   location that made the request, and the route. Id-like path segments (numbers, uuids,
   tokens, email addresses) and query values are hashed; other path segments and
@@ -76,6 +77,10 @@ instrumentQueryClient(queryClient); // before the first query
   `token`, `…_key`, …) are replaced with `***`; FormData, files and bodies
   over 8 KB are not sent. Headers are never read, so the cURL carries a
   `$TOKEN` placeholder.
+- Only with `captureResponses: true` as well (`data-capture-responses`): each
+  JSON response as received, cut at 32 KB, with the same credential-name
+  masking. These are real response values; enable it only where that is
+  acceptable.
 
 Use `ignore` for URLs that should not be recorded at all.
 

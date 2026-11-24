@@ -11,11 +11,65 @@ export const setCaptureRequests = (on: boolean) => {
   enabled = on;
 };
 
+/** `init({ captureResponses })`: off unless the app opts in; needs `captureRequests`. */
+let responses = false;
+export const setCaptureResponses = (on: boolean) => {
+  responses = on;
+};
+
 export type Replay = {
   url: string;
   body: string | null;
   omitted?: "unreadable" | "too-large";
+  response?: { body: string; truncated?: boolean };
 };
+
+const STOP = Symbol("stop");
+
+/**
+ * `JSON.stringify(maskJson(value))`, but it stops writing at `limit`
+ * characters, so a 5 MB list costs no more than its first 32 KB.
+ */
+export function boundedJson(value: unknown, limit: number) {
+  let out = "";
+  let truncated = false;
+  const write = (text: string) => {
+    if (out.length + text.length > limit) {
+      out += text.slice(0, limit - out.length);
+      truncated = true;
+      throw STOP;
+    }
+    out += text;
+  };
+  const walk = (inner: unknown): void => {
+    if (Array.isArray(inner)) {
+      write("[");
+      inner.forEach((item, i) => {
+        if (i) write(",");
+        walk(item === undefined ? null : item);
+      });
+      write("]");
+    } else if (inner !== null && typeof inner === "object") {
+      write("{");
+      let first = true;
+      for (const [key, item] of Object.entries(inner)) {
+        if (item === undefined || typeof item === "function") continue;
+        if (!first) write(",");
+        first = false;
+        write(`${JSON.stringify(key)}:`);
+        if (isSecretName(key)) write(JSON.stringify(MASK));
+        else walk(item);
+      }
+      write("}");
+    } else write(JSON.stringify(inner) ?? "null");
+  };
+  try {
+    walk(value);
+  } catch (error) {
+    if (error !== STOP) throw error;
+  }
+  return { body: out, truncated };
+}
 
 const maskParams = (params: URLSearchParams) => {
   const masked = new URLSearchParams();
@@ -62,9 +116,14 @@ function bodyText(body: unknown): string | null | undefined {
 /**
  * The request as the app sent it, for "Copy as cURL". Headers are never read,
  * so an Authorization token cannot leak; secret-like query and body fields are
- * masked. Null unless `captureRequests` is on.
+ * masked. Null unless `captureRequests` is on; with `captureResponses` it
+ * also carries the parsed JSON response, masked the same way.
  */
-export function replayOf(url: string, body: unknown): Replay | null {
+export function replayOf(
+  url: string,
+  body: unknown,
+  data?: unknown,
+): Replay | null {
   if (!enabled) return null;
   let href: string;
   try {
@@ -80,9 +139,24 @@ export function replayOf(url: string, body: unknown): Replay | null {
   } catch {
     text = undefined;
   }
-  if (text === undefined)
-    return { url: href, body: null, omitted: "unreadable" };
-  if (text !== null && text.length > INGEST_LIMITS.replayBodyLength)
-    return { url: href, body: null, omitted: "too-large" };
-  return { url: href, body: text };
+  const replay: Replay =
+    text === undefined
+      ? { url: href, body: null, omitted: "unreadable" }
+      : text !== null && text.length > INGEST_LIMITS.replayBodyLength
+        ? { url: href, body: null, omitted: "too-large" }
+        : { url: href, body: text };
+  if (responses && data !== undefined) {
+    try {
+      const { body: response, truncated } = boundedJson(
+        data,
+        INGEST_LIMITS.replayResponseLength,
+      );
+      replay.response = truncated
+        ? { body: response, truncated }
+        : { body: response };
+    } catch {
+      // A getter that throws: keep the request without its response.
+    }
+  }
+  return replay;
 }

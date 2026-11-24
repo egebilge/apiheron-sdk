@@ -2,7 +2,7 @@ import { newId, setIgnored } from "./capture";
 import { instrumentClone } from "./clone";
 import { diagnostics } from "./diagnostics";
 import { instrumentFetch } from "./fetch";
-import { setCaptureRequests } from "./replay";
+import { setCaptureRequests, setCaptureResponses } from "./replay";
 import { instrumentXhr } from "./xhr";
 
 export { getCaptureHealth } from "./diagnostics";
@@ -36,6 +36,13 @@ export type InitOptions = {
    * (password, token, …_key) are always masked; headers are never read.
    */
   captureRequests?: boolean;
+  /**
+   * With `captureRequests`, also record each JSON response as received
+   * (default false), cut at 32 KB, so the dashboard can show what came back.
+   * Secret-like fields are masked as in request bodies. Response values are
+   * real data: turn this on only where that is acceptable.
+   */
+  captureResponses?: boolean;
 };
 
 const STARTED = Symbol.for("apiheron.started");
@@ -55,6 +62,7 @@ export function init({
   release,
   sampleRate = 1,
   captureRequests = false,
+  captureResponses = false,
 }: InitOptions) {
   if (typeof window === "undefined") return; // SSR / tests: nothing to capture.
   const scope = globalThis as { [STARTED]?: true };
@@ -66,6 +74,7 @@ export function init({
 
   setIgnored(ignore);
   setCaptureRequests(captureRequests);
+  setCaptureResponses(captureResponses);
   instrumentFetch(endpoint);
   instrumentXhr(endpoint);
   instrumentClone();

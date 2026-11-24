@@ -166,7 +166,7 @@ function record({
     initiator: initiator?.slice(0, 1024) ?? null,
     page: globalThis.location?.pathname.slice(0, 2048) ?? null,
   };
-  const replay = replayOf(url, body);
+  const replay = replayOf(url, body, data);
   if (replay) event.replay = replay;
   timingKeys.set(event, [url, start, contentLength]);
   queue.push(event);

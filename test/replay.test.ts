@@ -1,7 +1,13 @@
 import { afterEach, expect, test } from "bun:test";
 import { INGEST_LIMITS } from "../src/core/limits";
 import { capture, drainRequests } from "../src/capture";
-import { MASK, replayOf, setCaptureRequests } from "../src/replay";
+import {
+  boundedJson,
+  MASK,
+  replayOf,
+  setCaptureRequests,
+  setCaptureResponses,
+} from "../src/replay";
 
 afterEach(() => {
   setCaptureRequests(false);
@@ -74,4 +80,33 @@ test("unreadable and oversized bodies are dropped with a reason", () => {
   const big = "x".repeat(INGEST_LIMITS.replayBodyLength + 1);
   expect(replayOf("https://api.test", big)?.omitted).toBe("too-large");
   expect(replayOf("https://api.test", undefined)?.body).toBeNull();
+});
+
+test("captureResponses: masked JSON response, cut at the limit", () => {
+  setCaptureRequests(true);
+  setCaptureResponses(true);
+  capture({
+    ...base,
+    method: "GET",
+    url: "https://api.test/me",
+    body: null,
+    data: { name: "Ada", token: "t", list: [1, null], skip: undefined },
+  });
+  const [event] = drainRequests();
+  expect(event?.replay?.response).toEqual({
+    body: '{"name":"Ada","token":"***","list":[1,null]}',
+  });
+  const big = { rows: Array.from({ length: 10_000 }, (_, i) => ({ i })) };
+  const cut = boundedJson(big, INGEST_LIMITS.replayResponseLength);
+  expect(cut.truncated).toBe(true);
+  expect(cut.body.length).toBe(INGEST_LIMITS.replayResponseLength);
+  expect(JSON.stringify(big).startsWith(cut.body)).toBe(true);
+  setCaptureResponses(false);
+});
+
+test("captureResponses needs captureRequests", () => {
+  setCaptureResponses(true);
+  capture({ ...base, method: "GET", url: "https://api.test/me", body: null });
+  expect(drainRequests()[0]?.replay).toBeUndefined();
+  setCaptureResponses(false);
 });

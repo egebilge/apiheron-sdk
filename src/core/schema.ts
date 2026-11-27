@@ -50,6 +50,12 @@ export const RequestEventSchema = z.object({
   bytes: z.number().int().nonnegative(),
   /** Compressed body size from Resource Timing, else `content-length`; absent when neither is visible (no `Timing-Allow-Origin`, chunked). */
   wireBytes: z.number().int().positive().max(2_147_483_647).nullish(),
+  /**
+   * Resource Timing `responseStart - requestStart`: request sent to first
+   * byte, the server's share without connection setup. Absent when the browser
+   * hides it (cross-origin without `Timing-Allow-Origin`) and from SDKs before 0.6.
+   */
+  waitMs: z.number().nonnegative().max(86_400_000).nullish(),
   leaves: z.array(line(INGEST_LIMITS.pathLength)).max(INGEST_LIMITS.leaves),
   itemCount: z.number().int().nonnegative().nullable(),
   /** App call-site frames that started the request, e.g. `VersionPoll (version-poll.tsx:23)`. */

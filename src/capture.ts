@@ -260,8 +260,11 @@ export function drainRequests(): RequestEvent[] {
   diagnostics.bufferedRequests = 0;
   const events = queue.splice(0);
   for (const event of events) {
-    const wireBytes = wireBytesOf(event);
+    const entry = timingEntry(event);
+    const wireBytes = wireBytesOf(event, entry);
     if (wireBytes) event.wireBytes = wireBytes;
+    const waitMs = waitMsOf(entry);
+    if (waitMs !== undefined) event.waitMs = waitMs;
   }
   return events;
 }
@@ -279,15 +282,36 @@ const timingKeys = new WeakMap<
  * always exposes it, and it counts the body as sent. Chunked responses carry
  * neither, and nothing is sent.
  */
-function wireBytesOf(event: RequestEvent): number | undefined {
-  const [url, start, contentLength] = timingKeys.get(event) ?? [];
-  const size = timingBytes(url, start) || contentLength || 0;
+function wireBytesOf(
+  event: RequestEvent,
+  entry: PerformanceResourceTiming | undefined,
+): number | undefined {
+  const [, , contentLength] = timingKeys.get(event) ?? [];
+  const size = entry?.encodedBodySize || contentLength || 0;
   return size > 0 ? Math.min(Math.round(size), 2_147_483_647) : undefined;
 }
 
-function timingBytes(url?: string, start?: number): number {
+/**
+ * Request sent to first byte: the server's share, without DNS, connection
+ * setup or a stalled socket. Zero timestamps mean the browser hid them
+ * (cross-origin without `Timing-Allow-Origin`).
+ */
+function waitMsOf(
+  entry: PerformanceResourceTiming | undefined,
+): number | undefined {
+  if (!entry || entry.requestStart <= 0 || entry.responseStart <= 0)
+    return undefined;
+  const wait = entry.responseStart - entry.requestStart;
+  return wait >= 0 ? Math.round(wait) : undefined;
+}
+
+/** The Resource Timing entry closest to the request's start, if any. */
+function timingEntry(
+  event: RequestEvent,
+): PerformanceResourceTiming | undefined {
+  const [url, start] = timingKeys.get(event) ?? [];
   try {
-    if (!url || start === undefined) return 0;
+    if (!url || start === undefined) return undefined;
     let best: PerformanceResourceTiming | undefined;
     for (const entry of performance.getEntriesByName(
       new URL(url, globalThis.location?.href).href,
@@ -299,9 +323,9 @@ function timingBytes(url?: string, start?: number): number {
       )
         best = entry;
     }
-    return best?.encodedBodySize ?? 0;
+    return best;
   } catch {
-    return 0;
+    return undefined;
   }
 }
 

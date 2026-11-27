@@ -201,6 +201,38 @@ test("wireBytes comes from the closest resource timing entry, then content-lengt
   }
 });
 
+test("waitMs is the server's share from resource timing, omitted when hidden", () => {
+  const native = performance.getEntriesByName;
+  const entry = (requestStart: number, responseStart: number) =>
+    ((name: string) =>
+      name === "https://api.test/wait"
+        ? [{ startTime: 0, encodedBodySize: 10, requestStart, responseStart }]
+        : []) as unknown as typeof native;
+  const send = () =>
+    capture({
+      source: "fetch",
+      method: "GET",
+      url: "https://api.test/wait",
+      body: null,
+      status: 200,
+      start: 0,
+      bytes: 10,
+      data: { a: 1 },
+    });
+  try {
+    // 50 s stalled before the request went out, 120.4 ms on the server.
+    performance.getEntriesByName = entry(50_000, 50_120.4);
+    send();
+    expect(drainRequests()[0]?.waitMs).toBe(120);
+    // Cross-origin without Timing-Allow-Origin zeroes both timestamps.
+    performance.getEntriesByName = entry(0, 0);
+    send();
+    expect(drainRequests()[0]).not.toHaveProperty("waitMs");
+  } finally {
+    performance.getEntriesByName = native;
+  }
+});
+
 test("streams of JSON are not read as one JSON body", () => {
   expect(isJsonBody("application/json; charset=utf-8")).toBe(true);
   expect(isJsonBody("application/problem+json")).toBe(true);
